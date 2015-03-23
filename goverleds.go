@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"flag"
 	"fmt"
 	"html"
 	"net/http"
@@ -13,8 +14,16 @@ import (
 	"github.com/hybridgroup/gobot/platforms/gpio"
 )
 
-func main() {
+type status string
 
+const (
+	ON  status = "on"
+	OFF status = "off"
+)
+
+var device = flag.String("device", "", "arduino device, ex: /dev/tty.usbmodemfa131")
+
+func main() {
 	gbot := gobot.NewGobot()
 
 	a := api.NewAPI(gbot)
@@ -24,7 +33,7 @@ func main() {
 	a.Debug()
 	a.Start()
 
-	firmataAdaptor := firmata.NewFirmataAdaptor("arduino", "/dev/tty.usbmodemfa131")
+	firmataAdaptor := firmata.NewFirmataAdaptor("arduino", *device)
 	button := gpio.NewButtonDriver(firmataAdaptor, "buttonOff", "10")
 
 	robot := gobot.NewRobot("bot",
@@ -34,7 +43,7 @@ func main() {
 
 	work := func() {
 		gobot.On(button.Event("push"), func(data interface{}) {
-			actionOnLeds(robot, "off")
+			actionOnLeds(robot, OFF)
 		})
 	}
 
@@ -58,13 +67,13 @@ func main() {
 			buffer.WriteString("led %s %s")
 			buffer.WriteString(ledName)
 			buffer.WriteString(action.(string))
-			actionOnLed(robot.Device(ledName).(*gpio.LedDriver), action.(string))
+			actionOnLed(robot.Device(ledName).(*gpio.LedDriver), action.(status))
 		}
-		return fmt.Sprintf("Led(s) %s aa", buffer.String())
+		return fmt.Sprintf("Led(s) %s", buffer.String())
 	})
 
 	robot.AddCommand("leds", func(params map[string]interface{}) interface{} {
-		actionOnLeds(robot, params["action"].(string))
+		actionOnLeds(robot, params["action"].(status))
 		return fmt.Sprintf("all leds action")
 	})
 
@@ -72,7 +81,7 @@ func main() {
 	gbot.Start()
 }
 
-func actionOnLeds(robot *gobot.Robot, action string) {
+func actionOnLeds(robot *gobot.Robot, action status) {
 	robot.Devices().Each(func(device gobot.Device) {
 		if reflect.TypeOf(device).String() == "*gpio.LedDriver" {
 			actionOnLed(device.(*gpio.LedDriver), action)
@@ -80,10 +89,10 @@ func actionOnLeds(robot *gobot.Robot, action string) {
 	})
 }
 
-func actionOnLed(led *gpio.LedDriver, action string) {
-	if action == "on" {
+func actionOnLed(led *gpio.LedDriver, action status) {
+	if action == ON {
 		led.On()
-	} else if action == "off" {
+	} else if action == OFF {
 		led.Off()
 	}
 }
